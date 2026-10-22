@@ -733,6 +733,16 @@ fn working_dir() -> std::path::PathBuf {
     d
 }
 
+/// The notes folder preference as a folder the agent may read: `None` when empty or not a folder.
+pub fn notes_folder(pref: &str) -> Option<std::path::PathBuf> {
+    let p = pref.trim();
+    if p.is_empty() {
+        return None;
+    }
+    let d = std::path::PathBuf::from(p);
+    d.is_dir().then_some(d)
+}
+
 /// Start the agent: the chat's control endpoint for its MCP bridge if needed, the process.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
@@ -772,7 +782,8 @@ pub fn connect(app: &mut SolveApp, ctx: &egui::Context) {
     } else if cli.is_none() {
         chat.notice(tr("ui.agent_chat_no_cli"), true);
     }
-    let bridge = cli.zip(chat.tools_port).map(|(cli, port)| acp::McpBridge { cli, port });
+    let notes = notes_folder(&app.preferences.agent_vault_dir);
+    let bridge = cli.zip(chat.tools_port).map(|(cli, port)| acp::McpBridge { cli, port, notes });
     let wake = ctx.clone();
     let start = backend::StartContext { cwd: working_dir(), bridge, tools: chat.tools_tx.clone(), wake: Box::new(move || wake.request_repaint()) };
     let started: Result<Box<dyn ChatBackend>, String> = match entry.kind {

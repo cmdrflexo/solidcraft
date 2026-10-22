@@ -9,7 +9,8 @@ use solidcraft_engine::MAX_LINE;
 use solidcraft_engine::io::vfs::{self, PathScope};
 
 use crate::backend::Backend;
-use crate::tools::{call_tool, check_arguments, tool_definitions};
+use crate::notes::{self, Notes};
+use crate::tools::{call_tool, check_arguments, note_tool_definitions, tool_definitions};
 
 /// The newest protocol revision we speak; offered when the client asks for one we don't know.
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
@@ -38,6 +39,7 @@ pub struct Server {
     backend: Box<dyn Backend>,
     initialized: bool,
     scope: Option<PathScope>,
+    notes: Option<Notes>,
 }
 
 fn response(id: Value, result: Value) -> Value {
@@ -49,12 +51,17 @@ fn error(id: Value, code: i64, message: impl Into<String>) -> Value {
 
 impl Server {
     pub fn new(backend: Box<dyn Backend>) -> Self {
-        Self { backend, initialized: false, scope: None }
+        Self { backend, initialized: false, scope: None, notes: None }
     }
     /// Confine the files tool calls may reach to `scope` (`None`: anywhere). `solidcraft-cli mcp`
     /// always sets one unless started with `--allow-any-path` (docs/mcp.md).
     pub fn with_path_scope(mut self, scope: Option<PathScope>) -> Self {
         self.scope = scope;
+        self
+    }
+    /// Let the agent list and read the Markdown notes in this folder (`--notes`, docs/mcp.md).
+    pub fn with_notes(mut self, notes: Option<Notes>) -> Self {
+        self.notes = notes;
         self
     }
     pub fn backend(&mut self) -> &mut dyn Backend {
@@ -143,11 +150,21 @@ impl Server {
                     "protocolVersion": version,
                     "capabilities": {"tools": {"listChanged": false}, "resources": {"listChanged": false}},
                     "serverInfo": {"name": "solidcraft", "title": "SolidCraft", "version": env!("CARGO_PKG_VERSION")},
-                    "instructions": format!("{INSTRUCTIONS} Backend: {}.", self.backend.describe()),
+                    "instructions": format!(
+                        "{INSTRUCTIONS} Backend: {}.{}",
+                        self.backend.describe(),
+                        self.notes.as_ref().map(Notes::instructions).unwrap_or_default()
+                    ),
                 }))
             }
             "ping" => Ok(json!({})),
-            "tools/list" => Ok(json!({"tools": tool_definitions()})),
+            "tools/list" => {
+                let mut tools = tool_definitions();
+                if self.notes.is_some() {
+                    tools.extend(note_tool_definitions());
+                }
+                Ok(json!({"tools": tools}))
+            }
             "tools/call" => {
                 let name = params.get("name").and_then(Value::as_str).ok_or((INVALID_PARAMS, "missing tool `name`".to_string()))?;
                 let args = match params.get("arguments") {
@@ -155,6 +172,20 @@ impl Server {
                     Some(a) => a.clone(),
                 };
                 check_arguments(name, &args).map_err(|e| (INVALID_PARAMS, e))?;
+                // Notes are read here, in the server, inside the notes folder alone.
+                if notes::TOOLS.contains(&name) {
+                    let empty = serde_json::Map::new();
+                    let a = args.as_object().unwrap_or(&empty);
+                    let r = match &self.notes {
+                        Some(n) => n.call(name, a),
+                        None => Err(format!("`{name}`: no notes folder (start the server with --notes DIR)")),
+                    };
+                    return Ok(match r {
+                        Ok(Value::String(text)) => json!({"content": [{"type": "text", "text": text}]}),
+                        Ok(v) => json!({"content": [{"type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default()}]}),
+                        Err(e) => json!({"content": [{"type": "text", "text": e}], "isError": true}),
+                    });
+                }
                 // The open design's folder counts as it is now (a save-as or open moves it).
                 let scope = self.scope.clone().map(|s| s.with_design(self.backend.design_path().as_deref()));
                 let backend = self.backend.as_mut();

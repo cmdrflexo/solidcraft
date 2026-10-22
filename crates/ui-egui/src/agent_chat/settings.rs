@@ -165,6 +165,13 @@ pub fn page(app: &mut SolveApp, ui: &mut egui::Ui) {
             }
         });
     });
+    ui_kit::section(ui, "notes", tr("ui.ai_notes"), true, |ui| {
+        ui_kit::row(ui, tr("ui.ai_notes_folder"), |ui| ui_kit::text_field(ui, &mut app.preferences.agent_vault_dir, tr("ui.ai_notes_folder_hint")));
+        ui_kit::text(ui, tr("ui.ai_notes_note"), ui_kit::Text::Note("notes"));
+        if !app.preferences.agent_vault_dir.trim().is_empty() && super::notes_folder(&app.preferences.agent_vault_dir).is_none() {
+            ui_kit::text(ui, tr("ui.ai_notes_missing"), ui_kit::Text::Report("notes_missing", true));
+        }
+    });
     ui_kit::section(ui, "panel", tr("ui.ai_panel"), true, |ui| {
         ui_kit::row(ui, tr("ui.agent_chat_side"), |ui| {
             let p = &mut app.preferences;

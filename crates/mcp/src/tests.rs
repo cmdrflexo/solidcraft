@@ -1572,6 +1572,9 @@ fn tool_annotations_tell_the_whole_truth() {
     for name in ["list_commands", "describe_command", "inspect_design", "measure", "body_topology", "crash_reports", "running"] {
         assert_eq!(hints(name), (true, false, false), "{name}");
     }
+    for t in crate::note_tool_definitions() {
+        assert_eq!(t["annotations"]["readOnlyHint"], true, "{}", t["name"]);
+    }
     assert_eq!(hints("new_design"), (false, true, false));
     for name in ["set_parameter", "undo", "redo"] {
         assert_eq!(hints(name), (false, false, false), "{name}");
@@ -1657,4 +1660,40 @@ fn describe_command_and_strict_parameter_checking() {
     assert!(text.contains("unknown key `operaton`; did you mean `operation`?"), "{text}");
     let m = tool(&mut s, "measure", json!({}));
     assert_eq!(m["body_count"], json!(0), "{m}");
+}
+
+/// With `--notes`, the server lists `list_notes` and `read_note`, says where the notes are, and
+/// reads only Markdown notes in the folder; without it, neither tool is listed or served.
+#[test]
+fn notes_tools_come_with_a_notes_folder_only() {
+    let d = std::env::temp_dir().join(format!("solidcraft-mcp-notes-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    std::fs::create_dir_all(d.join("vault/Projects")).unwrap();
+    std::fs::write(d.join("vault/me.md"), "# Me\n").unwrap();
+    std::fs::write(d.join("vault/Projects/SolidCraft.md"), "# SolidCraft\n").unwrap();
+    std::fs::write(d.join("secret.md"), "no").unwrap();
+    let names = |s: &mut Server| -> Vec<String> {
+        let r = call(s, 2, "tools/list", json!({}));
+        r["result"]["tools"].as_array().unwrap().iter().filter_map(|t| t["name"].as_str()).map(str::to_owned).collect()
+    };
+
+    let mut plain = server();
+    assert!(!names(&mut plain).iter().any(|n| n.contains("note")));
+    let r = raw_tool(&mut plain, "read_note", json!({"path": "me.md"}));
+    assert_eq!(r["result"]["isError"], json!(true), "{r}");
+
+    let notes = crate::Notes::new(&d.join("vault")).unwrap();
+    let mut s = server().with_notes(Some(notes));
+    assert!(names(&mut s).iter().any(|n| n == "list_notes") && names(&mut s).iter().any(|n| n == "read_note"));
+    let init = call(&mut s, 1, "initialize", json!({"protocolVersion": PROTOCOL_VERSION, "capabilities": {}}));
+    assert!(init["result"]["instructions"].as_str().unwrap().contains("vault"), "{init}");
+    let list = tool(&mut s, "list_notes", json!({}));
+    assert_eq!(list["notes"], json!(["Projects/SolidCraft.md", "me.md"]));
+    let r = raw_tool(&mut s, "read_note", json!({"path": "SolidCraft"}));
+    assert_eq!(r["result"]["content"][0]["text"], "# SolidCraft\n", "{r}");
+    let r = raw_tool(&mut s, "read_note", json!({"path": "../secret.md"}));
+    assert_eq!(r["result"]["isError"], json!(true), "{r}");
+    let r = raw_tool(&mut s, "read_note", json!({"path": "me.md", "lines": 3}));
+    assert!(r.get("error").is_some(), "unknown arguments are refused: {r}");
+    let _ = std::fs::remove_dir_all(&d);
 }

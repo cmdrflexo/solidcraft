@@ -219,6 +219,14 @@ The agent reaches the open design only through SolidCraft's own tools (the
   **›** or the arrow keys, closed with Esc or a click outside). A long message scrolls inside its
   box, so **Send** and the buttons beside it stay in view.
 
+## Notes
+
+Preferences → AI → **Notes** → **Notes folder** lets the agent read a folder of Markdown notes,
+such as an Obsidian vault: SolidCraft starts its MCP server with `--notes` ([mcp.md](mcp.md#notes-folder)),
+and the agent gets `list_notes` and `read_note`. It reads `.md` files in that folder and its
+subfolders and nothing else; it can't change them. The setting takes effect for the next
+conversation; the page says so when the folder doesn't exist.
+
 ## Permissions
 
 Preferences → AI → **Permissions** decides what the agent may do without asking, for every agent;

@@ -57,14 +57,20 @@ pub const BRIDGE_NAME: &str = "solidcraft-app";
 pub struct McpBridge {
     pub cli: std::path::PathBuf,
     pub port: u16,
+    /// The notes folder the agent may list and read (`--notes`), when the user set one.
+    pub notes: Option<std::path::PathBuf>,
 }
 
 impl McpBridge {
     pub fn to_json(&self) -> Value {
+        let mut args = vec!["mcp".to_string(), "--connect".into(), format!("127.0.0.1:{}", self.port)];
+        if let Some(n) = &self.notes {
+            args.extend(["--notes".to_string(), n.to_string_lossy().into_owned()]);
+        }
         json!({
             "name": BRIDGE_NAME,
             "command": self.cli.to_string_lossy(),
-            "args": ["mcp", "--connect", format!("127.0.0.1:{}", self.port)],
+            "args": args,
             "env": [],
         })
     }
@@ -78,6 +84,10 @@ inspect_design. Prefer one `batch` over many small calls. Saving, opening or exp
 the chat, and each message allows a limited number of changes. Don't use shell or file tools: work through the SolidCraft tools. \
 Keep answers short.";
 
+/// Added to [`SYSTEM_NOTE`] when the user set a notes folder.
+pub const NOTES_NOTE: &str = "The user's Markdown notes (their vault) are reachable too: `list_notes` finds them and `read_note` reads one \
+by path or by [[wikilink]] name. Read them when the user refers to their notes or the answer may be in them.";
+
 /// The Claude Code adapter's own tools that reach the computer rather than the design: turned off
 /// for the session (`_meta.claudeCode.options.disallowedTools`), so it works through SolidCraft's.
 pub const CLAUDE_DISALLOWED_TOOLS: &[&str] =
@@ -85,11 +95,15 @@ pub const CLAUDE_DISALLOWED_TOOLS: &[&str] =
 
 pub fn session_new_params(cwd: &std::path::Path, bridge: Option<&McpBridge>) -> Value {
     let servers: Vec<Value> = bridge.map(McpBridge::to_json).into_iter().collect();
+    let note = match bridge.and_then(|b| b.notes.as_ref()) {
+        Some(_) => format!("{SYSTEM_NOTE} {NOTES_NOTE}"),
+        None => SYSTEM_NOTE.to_string(),
+    };
     json!({
         "cwd": cwd.to_string_lossy(),
         "mcpServers": servers,
         "_meta": {
-            "systemPrompt": {"append": SYSTEM_NOTE},
+            "systemPrompt": {"append": note},
             // Hosts may opt a session out of "bypass permissions" (the Claude adapter reads it):
             // every tool call the agent asks about reaches the panel.
             // Its own shell and file tools are off: the agent works through SolidCraft's tools.
@@ -502,7 +516,7 @@ mod tests {
 
     #[test]
     fn the_session_gets_the_bridged_mcp_server_without_a_token_or_any_path() {
-        let b = McpBridge { cli: "/opt/solidcraft/solidcraft-cli".into(), port: 41234 };
+        let b = McpBridge { cli: "/opt/solidcraft/solidcraft-cli".into(), port: 41234, notes: None };
         let p = session_new_params(std::path::Path::new("/home/u/designs"), Some(&b));
         let s = &p["mcpServers"][0];
         assert_eq!(s["name"], BRIDGE_NAME);
@@ -585,5 +599,18 @@ mod tests {
         let changed = r#"{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"current_model_update","currentModelId":"haiku"}}}"#;
         assert_eq!(parse(changed), Some(Incoming::ModelChanged("haiku".into())));
         assert_eq!(set_model_params("s", "opus"), json!({"sessionId": "s", "modelId": "opus"}));
+    }
+
+    #[test]
+    fn a_notes_folder_reaches_the_bridge_and_the_session_note() {
+        let b = McpBridge { cli: "/opt/solidcraft/solidcraft-cli".into(), port: 41234, notes: Some("/home/u/vault".into()) };
+        let p = session_new_params(std::path::Path::new("/tmp"), Some(&b));
+        assert_eq!(p["mcpServers"][0]["args"], json!(["mcp", "--connect", "127.0.0.1:41234", "--notes", "/home/u/vault"]));
+        let note = p["_meta"]["systemPrompt"]["append"].as_str().unwrap_or("");
+        assert!(note.starts_with(SYSTEM_NOTE) && note.contains("read_note"), "{note}");
+        // The adapter's own Read stays off: it would reach any file, not only notes.
+        assert!(p["_meta"]["claudeCode"]["options"]["disallowedTools"].as_array().is_some_and(|t| t.iter().any(|x| x == "Read")));
+        let without = McpBridge { notes: None, ..b };
+        assert_eq!(session_new_params(std::path::Path::new("/tmp"), Some(&without))["_meta"]["systemPrompt"]["append"], SYSTEM_NOTE);
     }
 }

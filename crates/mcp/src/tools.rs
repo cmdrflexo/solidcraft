@@ -58,6 +58,42 @@ fn string(desc: &str) -> Value {
     json!({"type": "string", "description": desc})
 }
 
+/// The notes tools (`crate::notes`), listed only when the server has a notes folder.
+pub fn note_tool_definitions() -> Vec<Value> {
+    vec![
+        tool(
+            "list_notes",
+            "List notes",
+            "The Markdown notes in the user's notes folder (e.g. an Obsidian vault): their paths in the folder, with `/`, sorted. \
+             Hidden folders (.git, .obsidian) are left out. Optional `folder` (a subfolder) and case-insensitive substring `filter` over the path.",
+            obj(
+                json!({
+                    "folder": string("Subfolder of the notes folder, e.g. \"Projects/Vehicles\" (default: all of it)"),
+                    "filter": string("Substring of the path to match, e.g. \"avalanche\""),
+                }),
+                &[],
+            ),
+            Effect::ReadOnly,
+        ),
+        tool(
+            "read_note",
+            "Read a note",
+            "One Markdown note from the user's notes folder, as text. `path`: its path in the folder (\"Projects/Home.md\"), or just its \
+             name as a [[wikilink]] gives it (\"Home\"), when only one note has that name. Optional `offset` (first line, from 1) and \
+             `limit` (number of lines) read part of a long note.",
+            obj(
+                json!({
+                    "path": string("The note's path in the notes folder, or its name"),
+                    "offset": {"type": "integer", "description": "First line to read, from 1 (default 1)"},
+                    "limit": {"type": "integer", "description": "Most lines to read (default all)"},
+                }),
+                &["path"],
+            ),
+            Effect::ReadOnly,
+        ),
+    ]
+}
+
 /// Every tool, with its JSON schema. The same list serves the headless and the bridged backend.
 pub fn tool_definitions() -> Vec<Value> {
     vec![
@@ -323,7 +359,8 @@ fn type_matches(t: &str, v: &Value) -> bool {
 /// Validates `args` against the tool's schema (top level): unknown tool, missing required
 /// arguments, unknown arguments, type and enum mismatches.
 pub(crate) fn check_arguments(name: &str, args: &Value) -> Result<(), String> {
-    let defs = tool_definitions();
+    let mut defs = tool_definitions();
+    defs.extend(note_tool_definitions());
     let def = defs.iter().find(|d| d["name"] == name).ok_or_else(|| format!("unknown tool `{name}`"))?;
     let schema = &def["inputSchema"];
     let Some(a) = args.as_object() else { return Err(format!("{name}: arguments must be an object")) };
