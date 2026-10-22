@@ -301,6 +301,9 @@ fn dispatch(app: &mut SolveApp, ctx: &egui::Context, method: &str, p: &Value) ->
         "engine.commands" => wrap(app.session.execute("engine.commands", &json!({})).map_err(|e| e.to_string())),
         "document.inspect" => wrap(app.session.execute("document.inspect", p).map_err(|e| e.to_string())),
         "ui.messages" => ok(crate::messages::control(app, p)),
+        // The MCP server's question before it writes a note (`--notes`): reaching here means the
+        // agent chat's gate let it through (the user allowed it); other clients aren't gated.
+        "notes.write" => ok(json!({"allowed": true})),
         "ui.inspect" => ok(json!({
             "ui": serde_json::to_value(&app.ui).unwrap_or_default(),
             "visibility": app.session.visibility,

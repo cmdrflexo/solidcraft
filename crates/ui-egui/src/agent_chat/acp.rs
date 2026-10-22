@@ -86,7 +86,8 @@ Keep answers short.";
 
 /// Added to [`SYSTEM_NOTE`] when the user set a notes folder.
 pub const NOTES_NOTE: &str = "The user's Markdown notes (their vault) are reachable too: `list_notes` finds them and `read_note` reads one \
-by path or by [[wikilink]] name. Read them when the user refers to their notes or the answer may be in them.";
+by path or by [[wikilink]] name. Read them when the user refers to their notes or the answer may be in them. `write_note` creates \
+or replaces a note once the user allows it: read a note before replacing it and keep what the user wrote.";
 
 /// The Claude Code adapter's own tools that reach the computer rather than the design: turned off
 /// for the session (`_meta.claudeCode.options.disallowedTools`), so it works through SolidCraft's.

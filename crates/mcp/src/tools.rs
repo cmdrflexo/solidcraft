@@ -92,6 +92,22 @@ pub fn note_tool_definitions() -> Vec<Value> {
             ),
             Effect::ReadOnly,
         ),
+        tool(
+            "write_note",
+            "Write a note",
+            "Create or replace one Markdown note in the user's notes folder with `content` (the whole note). `path`: its path in the \
+             folder, such as \"Projects/Idea.md\" (`.md` is added when there is no extension); missing folders are made. With the app \
+             running, the user allows or declines each write. Private folders, notes marked ai-access: none, hidden folders and \
+             other file types are refused. Read a note before replacing it, and keep what the user wrote.",
+            obj(
+                json!({
+                    "path": string("The note's path in the notes folder"),
+                    "content": string("The whole note, as Markdown"),
+                }),
+                &["path", "content"],
+            ),
+            Effect::Files,
+        ),
     ]
 }
 

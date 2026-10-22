@@ -1303,7 +1303,7 @@
   "ui.ai_notes_folder": "笔记文件夹",
   "ui.ai_notes_folder_hint": "Markdown 笔记所在的文件夹",
   "ui.ai_notes_missing": "此文件夹不存在：代理无法读取笔记。",
-  "ui.ai_notes_note": "代理只能读取此文件夹及其子文件夹中的 Markdown (.md) 文件，不能读取计算机上的其他内容。从下一次对话开始生效。",
+  "ui.ai_notes_note": "代理可以读取此文件夹及其子文件夹中的 Markdown (.md) 文件，并在你逐一允许后在其中写入笔记；不会触及计算机上的其他内容。从下一次对话开始生效。",
   "ui.ai_panel": "面板",
   "ui.ai_permissions": "权限",
   "ui.ai_preset": "预设",

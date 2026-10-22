@@ -1573,7 +1573,9 @@ fn tool_annotations_tell_the_whole_truth() {
         assert_eq!(hints(name), (true, false, false), "{name}");
     }
     for t in crate::note_tool_definitions() {
-        assert_eq!(t["annotations"]["readOnlyHint"], true, "{}", t["name"]);
+        let writes = t["name"] == "write_note";
+        assert_eq!(t["annotations"]["readOnlyHint"], !writes, "{}", t["name"]);
+        assert_eq!(t["annotations"]["destructiveHint"], writes, "{}", t["name"]);
     }
     assert_eq!(hints("new_design"), (false, true, false));
     for name in ["set_parameter", "undo", "redo"] {

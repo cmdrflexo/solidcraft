@@ -108,10 +108,12 @@ file dialogs are never limited.
 
 ### Notes folder
 
-`--notes DIR` lets the agent list and read the Markdown notes in one folder, such as an Obsidian
-vault, with the `list_notes` and `read_note` tools (listed only with this option). It is apart
-from the folder limits above: only `.md` files inside `DIR` are read, after `..` and links are
-resolved, up to 1 MB each, and nothing there is written. Hidden folders (`.git`, `.obsidian`) are
+`--notes DIR` lets the agent list, read and write the Markdown notes in one folder, such as an
+Obsidian vault, with the `list_notes`, `read_note` and `write_note` tools (listed only with this
+option). It is apart from the folder limits above: only `.md` files inside `DIR` are read or
+written, after `..` and links are resolved, up to 1 MB each. Bridged to the app, each write first
+asks the app (`notes.write`), whose agent chat waits for the user's Allow; headless, the tool is
+marked destructive so the MCP client asks. Hidden folders (`.git`, `.obsidian`) are
 left out of the list, and links are not followed while listing.
 
 Notes you keep from assistants stay out of reach: anything in a folder named `Private` (at any
@@ -190,6 +192,7 @@ They cover the workflow, the command shapes, how to verify with `measure`, and t
 | `save` | `path?` | Save the design (to its current file without `path`). |
 | `list_notes` | `folder?`, `filter?` | With `--notes` only: the Markdown notes in the notes folder, as paths in it with `/`, sorted (`root`, `count`, `truncated`, `notes`), without private ones (see [Notes folder](#notes-folder)). `folder` lists a subfolder, `filter` matches the path (case-insensitive). |
 | `read_note` | `path`, `offset?`, `limit?` | With `--notes` only: one note's text. `path` is its path in the notes folder (or absolute inside it), with or without `.md`, or its name alone, as a `[[wikilink]]` gives it, when one note has that name. `offset` (first line, from 1) and `limit` (lines) read part of it. Private notes are refused. |
+| `write_note` | `path`, `content` | With `--notes` only: create or replace one note with `content`. `path` is relative to the notes folder (`.md` added without an extension; no `..`, no hidden or private folders, never over a note marked `ai-access: none`); missing folders are made. Bridged, the user allows each write first. Replies `{written, bytes, created}`. |
 
 `measure` with `items` reports each item under `items` (`length_mm`, `area_mm2` or `position`).
 A circle, arc, hole or other cylindrical face also gives `diameter`, `radius`, `center` and

@@ -21,6 +21,11 @@ pub trait Backend {
     fn design_path(&self) -> Option<String> {
         None
     }
+    /// Whether a running app answers `notes.write`, asking the user before a note is written
+    /// (the agent chat's gate). Headless, nobody is there to ask.
+    fn approves_writes(&self) -> bool {
+        false
+    }
     /// Commands run in this process, on this thread (the kernel's time in them can be measured
     /// here, #1833).
     fn in_process(&self) -> bool {
@@ -196,6 +201,9 @@ impl Backend for Remote {
         }
     }
     fn has_ui(&self) -> bool {
+        true
+    }
+    fn approves_writes(&self) -> bool {
         true
     }
     fn describe(&self) -> String {

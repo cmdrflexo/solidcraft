@@ -223,9 +223,12 @@ The agent reaches the open design only through SolidCraft's own tools (the
 
 Preferences → AI → **Notes** → **Notes folder** lets the agent read a folder of Markdown notes,
 such as an Obsidian vault: SolidCraft starts its MCP server with `--notes` ([mcp.md](mcp.md#notes-folder)),
-and the agent gets `list_notes` and `read_note`. It reads `.md` files in that folder and its
-subfolders and nothing else; it can't change them. Notes in a folder named `Private`, and notes
-whose frontmatter says `ai-access: none`, stay out of its reach. The setting takes effect for the next
+and the agent gets `list_notes`, `read_note` and `write_note`. It reads `.md` files in that folder
+and its subfolders and nothing else. Each note it writes (a new one or a replacement) waits for
+your **Allow** in the panel like a file action, showing the note's path and size; **Allow
+everything** lets writes through without asking. SolidCraft never commits anything: a sync
+tool such as Obsidian Git picks the change up. Notes in a folder named `Private`, and notes whose
+frontmatter says `ai-access: none`, stay out of its reach: never read, never written. The setting takes effect for the next
 conversation; the page says so when the folder doesn't exist.
 
 ## Permissions
@@ -260,8 +263,10 @@ saves, opens or inserts. A sweep's or pattern's `path` (curve ids) and an occurr
 
 - **Files wait for you** unless you chose **Allow everything**. **Cancel** or **Stop** declines
   everything that's waiting, and a question nobody answers is declined after four minutes. The
-  [MCP server's folder limits](mcp.md) still apply after you allow: the design's folder, the
-  recovery folder and the server's own scratch folder.
+  agent's files stay inside the [MCP server's folder limits](mcp.md) (the design's folder, the
+  recovery folder and the server's own scratch folder), except a file you allow: **Allow** or
+  **Always allow** opens that file's folder for that one request, so an export to a folder of
+  your own works. **Allow everything** doesn't: without your answer, the folder limits hold.
 - **A limit per message.** The agent may make 24 changes per message by default; you can set
   the number on the AI page. Reading the design doesn't count. When it reaches the limit, it's
   told to stop and report what's left; send another message to let it carry on.

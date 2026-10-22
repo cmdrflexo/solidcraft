@@ -177,7 +177,7 @@ impl Server {
                     let empty = serde_json::Map::new();
                     let a = args.as_object().unwrap_or(&empty);
                     let r = match &self.notes {
-                        Some(n) => n.call(name, a),
+                        Some(n) => n.call(name, a, self.backend.as_mut()),
                         None => Err(format!("`{name}`: no notes folder (start the server with --notes DIR)")),
                     };
                     return Ok(match r {
