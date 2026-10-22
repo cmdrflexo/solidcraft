@@ -25,7 +25,8 @@ pub enum Verdict {
 
 /// Methods the bridged MCP server uses; nothing else (clicks, preferences, quitting, the chat
 /// itself) is the agent's.
-const METHODS: &[&str] = &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.render", "ui.screenshot"];
+const METHODS: &[&str] =
+    &["engine.commands", "document.inspect", "engine.execute", "engine.batch", "ui.view", "ui.render", "ui.screenshot", "notes.write"];
 
 /// Parameter names that hold a file or folder and nothing else.
 const FILE_KEYS: &[&str] = &["file", "files", "dir", "folder", "out", "output", "filename", "target_path"];
@@ -108,6 +109,42 @@ fn names_a_file(id: &str, params: &Value) -> Option<String> {
         .or_else(|| AMBIGUOUS_KEYS.iter().find_map(|k| o.get(*k).and_then(|v| first(v, by_nature))))
 }
 
+/// Every file or folder a request names, in full (the values [`names_a_file`] finds), so an
+/// approved request can reach them: `engine.execute` and each step of `engine.batch`.
+pub fn named_files(method: &str, params: &Value) -> Vec<String> {
+    let one = |id: &str, params: &Value| -> Vec<String> {
+        let Some(o) = params.as_object() else { return Vec::new() };
+        let by_nature = is_file_verb(id);
+        let strings = |v: &Value| -> Vec<String> {
+            match v {
+                Value::String(s) => vec![s.clone()],
+                Value::Array(a) => a.iter().take(64).filter_map(Value::as_str).map(str::to_string).collect(),
+                _ => Vec::new(),
+            }
+        };
+        let mut out: Vec<String> = FILE_KEYS.iter().filter_map(|k| o.get(*k)).flat_map(strings).filter(|s| !s.is_empty()).collect();
+        out.extend(AMBIGUOUS_KEYS.iter().filter_map(|k| o.get(*k)).flat_map(strings).filter(|s| !s.is_empty() && (by_nature || looks_like_file(s))));
+        out
+    };
+    let mut files = match method {
+        "engine.execute" => one(params.get("command").and_then(Value::as_str).unwrap_or(""), params.get("params").unwrap_or(&Value::Null)),
+        "engine.batch" => params
+            .get("commands")
+            .and_then(Value::as_array)
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .take(10_000)
+            .flat_map(|s| {
+                let id = s.get("command").or_else(|| s.get("id")).and_then(Value::as_str).unwrap_or("");
+                one(id, s.get("params").unwrap_or(&Value::Null))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    files.truncate(64);
+    files
+}
+
 /// One command as the agent would run it. `undo_left`: steps this turn may still undo without
 /// reaching changes made before it.
 pub fn command(id: &str, params: &Value, undo_left: usize) -> Verdict {
@@ -169,6 +206,13 @@ pub fn request(method: &str, params: &Value, undo_left: usize) -> Verdict {
             } else {
                 Verdict::Ask(format!("batch: {}", asks.into_iter().take(6).collect::<Vec<_>>().join("; ")))
             }
+        }
+        // The MCP server asks before it writes a note in the notes folder (it writes it itself).
+        "notes.write" => {
+            let path: String = params.get("path").and_then(Value::as_str).unwrap_or("?").chars().take(200).collect();
+            let kb = params.get("bytes").and_then(Value::as_u64).unwrap_or(0).div_ceil(1024);
+            let what = if params.get("replaces").and_then(Value::as_bool) == Some(true) { "replace" } else { "new" };
+            Verdict::Ask(format!("write note: {path} ({what}, {kb} KB)"))
         }
         // A picture saved to a file names it.
         "ui.screenshot" | "ui.render" => match names_a_file("ui.render.export", params) {
@@ -330,5 +374,29 @@ mod tests {
         let elsewhere = json!({"path": "/home/u/Desktop/shot.png", "allow_paths": ["/tmp/solidcraft-mcp-41-a3", "/home/u/Desktop"]});
         assert!(matches!(request("ui.screenshot", &elsewhere, 0), Verdict::Ask(_)));
         assert_eq!(request("ui.render", &json!({"width": 400}), 0), Verdict::Run { change: false });
+    }
+
+    #[test]
+    fn named_files_are_given_in_full_for_commands_and_batches() {
+        let export = json!({"command": "file.export", "params": {"path": "C:\\Projects\\3D Prints\\Sliders\\slider.stl", "format": "stl"}});
+        assert_eq!(named_files("engine.execute", &export), ["C:\\Projects\\3D Prints\\Sliders\\slider.stl"]);
+        // A sweep's path is curve ids, not a file.
+        let sweep = json!({"command": "solid.sweep", "params": {"path": ["c1", "c2"], "profile": "p"}});
+        assert!(named_files("engine.execute", &sweep).is_empty());
+        let batch = json!({"commands": [
+            {"command": "solid.box", "params": {"length": 1}},
+            {"command": "file.save", "params": {"path": "/home/u/a.solidcraft"}},
+            {"command": "file.export", "params": {"output": "/home/u/out/b.step"}},
+        ]});
+        assert_eq!(named_files("engine.batch", &batch), ["/home/u/a.solidcraft", "/home/u/out/b.step"]);
+        assert!(named_files("document.inspect", &json!({"path": "/x"})).is_empty());
+    }
+
+    #[test]
+    fn writing_a_note_always_asks_and_says_which() {
+        let v = request("notes.write", &json!({"path": "Projects/Idea.md", "bytes": 1500, "replaces": true}), 0);
+        assert_eq!(v, Verdict::Ask("write note: Projects/Idea.md (replace, 2 KB)".into()));
+        assert!(matches!(request("notes.write", &json!({"path": "a.md", "bytes": 3}), 0), Verdict::Ask(a) if a.contains("new")));
+        assert_eq!(tool_key("notes.write", &json!({"path": "a.md"})), "notes.write");
     }
 }

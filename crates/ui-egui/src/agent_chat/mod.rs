@@ -1263,9 +1263,33 @@ fn approve_with(app: &mut SolveApp, id: u64, allow: bool, why: &str) {
         }
     }
     if allow {
-        app.control_held.push_back(h.req);
+        let mut req = h.req;
+        widen(&mut req);
+        app.control_held.push_back(req);
     } else {
         let _ = h.req.reply.send(json!({"ok": false, "error": format!("not run: {why}")}));
+    }
+}
+
+/// The user allowed a request that names files (on its card, or with "Always allow"): its folder
+/// limits take in those files' folders, for this request alone, so an approved export to a folder
+/// of the user's own works. Relative paths are left alone (they would resolve against the app's
+/// working folder); the limits' other rules (local drives, no device names…) still hold.
+fn widen(req: &mut ControlRequest) {
+    let folders: Vec<String> = gate::named_files(&req.method, &req.params)
+        .iter()
+        .map(std::path::Path::new)
+        .filter(|p| p.is_absolute())
+        .filter_map(|p| if p.is_dir() { Some(p) } else { p.parent() })
+        .map(|d| d.to_string_lossy().into_owned())
+        .collect();
+    if let Some(list) = req.params.get_mut("allow_paths").and_then(Value::as_array_mut) {
+        for f in folders {
+            let f = Value::String(f);
+            if !list.contains(&f) {
+                list.push(f);
+            }
+        }
     }
 }
 
@@ -1344,7 +1368,13 @@ fn pump_tools(app: &mut SolveApp) {
         let tool = gate::tool_key(&req.method, &req.params);
         let always = agents::always_allowed(&app.preferences, &app.agent_chat.running_id, &tool);
         let verdict = match gate::request(&req.method, &req.params, undo_left) {
-            gate::Verdict::Ask(_) if mode == agents::Mode::All || always => gate::Verdict::Run { change: true },
+            // "Always allow" is the user's answer for this tool: like Allow, it opens the files' folders.
+            gate::Verdict::Ask(_) if always => {
+                widen(&mut req);
+                gate::Verdict::Run { change: true }
+            }
+            // Allow everything skips the question; the folder limits still hold.
+            gate::Verdict::Ask(_) if mode == agents::Mode::All => gate::Verdict::Run { change: true },
             gate::Verdict::Run { change: true } if mode == agents::Mode::Ask && !always => {
                 gate::Verdict::Ask(gate::describe(&req.method, &req.params))
             }

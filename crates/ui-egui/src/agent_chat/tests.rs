@@ -140,6 +140,66 @@ fn file_actions_wait_for_the_user() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// An export the user allows to a folder outside the agent's folder limits works: Allow opens
+/// that folder for the request. Without the user's Allow (Allow everything) the limits hold.
+#[test]
+fn an_allowed_export_reaches_the_users_folder() {
+    let (mut app, tx) = app_in_a_turn();
+    let base = std::env::temp_dir().join(format!("sc-agent-chat-widen-{}", std::process::id()));
+    let (limits, theirs) = (base.join("limits"), base.join("Projects/3D Prints/Sliders"));
+    std::fs::create_dir_all(&limits).unwrap();
+    std::fs::create_dir_all(&theirs).unwrap();
+    let make = ask(&tx, "engine.execute", boxed(0.0));
+    frame(&mut app);
+    assert_eq!(make.recv_timeout(std::time::Duration::from_secs(30)).unwrap()["ok"], true);
+    let out = theirs.join("slider.stl");
+    let export =
+        |p: &std::path::Path| json!({"command": "file.export", "params": {"path": p.to_string_lossy()}, "allow_paths": [limits.to_string_lossy()]});
+
+    // Allow everything: nothing asks, and the folder limits still refuse the user's folder.
+    app.preferences.ai_permissions = agents::Mode::All;
+    let unasked = ask(&tx, "engine.execute", export(&out));
+    frame(&mut app);
+    let r = unasked.recv_timeout(std::time::Duration::from_secs(30)).unwrap();
+    assert_ne!(r["ok"], true, "{r}");
+    assert!(!out.exists());
+
+    // Asked and allowed: it reaches the folder.
+    app.preferences.ai_permissions = agents::Mode::Edits;
+    let allowed = ask(&tx, "engine.execute", export(&out));
+    frame(&mut app);
+    let id = app.agent_chat.held[0].id;
+    approve(&mut app, id, true);
+    frame(&mut app);
+    let r = allowed.recv_timeout(std::time::Duration::from_secs(30)).unwrap();
+    assert_eq!(r["ok"], true, "{r}");
+    assert!(out.exists());
+    let _ = std::fs::remove_dir_all(&base);
+}
+
+/// The MCP server asks before writing a note: the question waits for the user, and the
+/// answer goes back to it (it writes the note itself).
+#[test]
+fn writing_a_note_waits_for_the_user() {
+    let (mut app, tx) = app_in_a_turn();
+    let write = json!({"path": "Projects/Idea.md", "bytes": 12, "replaces": false});
+    let declined = ask(&tx, "notes.write", write.clone());
+    frame(&mut app);
+    assert_eq!(app.agent_chat.waiting(), 1);
+    assert!(matches!(app.agent_chat.items.last(), Some(Item::Approval { title, .. }) if title.contains("Projects/Idea.md")));
+    let id = app.agent_chat.held[0].id;
+    approve(&mut app, id, false);
+    let r = declined.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("declined")), "{r}");
+    let allowed = ask(&tx, "notes.write", write);
+    frame(&mut app);
+    let id = app.agent_chat.held[0].id;
+    approve(&mut app, id, true);
+    frame(&mut app);
+    let r = allowed.recv_timeout(std::time::Duration::from_secs(30)).unwrap();
+    assert_eq!(r["ok"], true, "{r}");
+}
+
 /// Crash reports and app methods never run for the agent, requests outside a message don't
 /// either, and a message stops taking changes at the limit.
 #[test]
