@@ -224,7 +224,8 @@ The agent reaches the open design only through SolidCraft's own tools (the
 Preferences → AI → **Notes** → **Notes folder** lets the agent read a folder of Markdown notes,
 such as an Obsidian vault: SolidCraft starts its MCP server with `--notes` ([mcp.md](mcp.md#notes-folder)),
 and the agent gets `list_notes` and `read_note`. It reads `.md` files in that folder and its
-subfolders and nothing else; it can't change them. The setting takes effect for the next
+subfolders and nothing else; it can't change them. Notes in a folder named `Private`, and notes
+whose frontmatter says `ai-access: none`, stay out of its reach. The setting takes effect for the next
 conversation; the page says so when the folder doesn't exist.
 
 ## Permissions

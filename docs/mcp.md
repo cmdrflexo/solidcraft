@@ -114,6 +114,11 @@ from the folder limits above: only `.md` files inside `DIR` are read, after `..`
 resolved, up to 1 MB each, and nothing there is written. Hidden folders (`.git`, `.obsidian`) are
 left out of the list, and links are not followed while listing.
 
+Notes you keep from assistants stay out of reach: anything in a folder named `Private` (at any
+level, in any case, also through a link) and any note whose frontmatter says `ai-access: none`.
+They are left out of the list, and `read_note` refuses them. Only folders below `DIR` count, so
+`DIR` itself may sit in a folder called `Private`.
+
 ```sh
 solidcraft-cli mcp --connect 127.0.0.1:7878 --notes ~/vault
 ```
@@ -183,8 +188,8 @@ They cover the workflow, the command shapes, how to verify with `measure`, and t
 | `new_design` | `name?` | Start an empty design. |
 | `open` | `path` | Open a `.solidcraft` design, a STEP file (`.step`/`.stp`) as a new design holding its bodies (an Import base feature), or a 3MF/STL file as mesh bodies. |
 | `save` | `path?` | Save the design (to its current file without `path`). |
-| `list_notes` | `folder?`, `filter?` | With `--notes` only: the Markdown notes in the notes folder, as paths in it with `/`, sorted (`root`, `count`, `truncated`, `notes`). `folder` lists a subfolder, `filter` matches the path (case-insensitive). |
-| `read_note` | `path`, `offset?`, `limit?` | With `--notes` only: one note's text. `path` is its path in the notes folder (or absolute inside it), with or without `.md`, or its name alone, as a `[[wikilink]]` gives it, when one note has that name. `offset` (first line, from 1) and `limit` (lines) read part of it. |
+| `list_notes` | `folder?`, `filter?` | With `--notes` only: the Markdown notes in the notes folder, as paths in it with `/`, sorted (`root`, `count`, `truncated`, `notes`), without private ones (see [Notes folder](#notes-folder)). `folder` lists a subfolder, `filter` matches the path (case-insensitive). |
+| `read_note` | `path`, `offset?`, `limit?` | With `--notes` only: one note's text. `path` is its path in the notes folder (or absolute inside it), with or without `.md`, or its name alone, as a `[[wikilink]]` gives it, when one note has that name. `offset` (first line, from 1) and `limit` (lines) read part of it. Private notes are refused. |
 
 `measure` with `items` reports each item under `items` (`length_mm`, `area_mm2` or `position`).
 A circle, arc, hole or other cylindrical face also gives `diameter`, `radius`, `center` and

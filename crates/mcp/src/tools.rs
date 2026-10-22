@@ -65,7 +65,8 @@ pub fn note_tool_definitions() -> Vec<Value> {
             "list_notes",
             "List notes",
             "The Markdown notes in the user's notes folder (e.g. an Obsidian vault): their paths in the folder, with `/`, sorted. \
-             Hidden folders (.git, .obsidian) are left out. Optional `folder` (a subfolder) and case-insensitive substring `filter` over the path.",
+             Hidden folders (.git, .obsidian) are left out, and so is what the user keeps private: folders named Private and notes \
+             marked ai-access: none. Optional `folder` (a subfolder) and case-insensitive substring `filter` over the path.",
             obj(
                 json!({
                     "folder": string("Subfolder of the notes folder, e.g. \"Projects/Vehicles\" (default: all of it)"),
@@ -80,7 +81,7 @@ pub fn note_tool_definitions() -> Vec<Value> {
             "Read a note",
             "One Markdown note from the user's notes folder, as text. `path`: its path in the folder (\"Projects/Home.md\"), or just its \
              name as a [[wikilink]] gives it (\"Home\"), when only one note has that name. Optional `offset` (first line, from 1) and \
-             `limit` (number of lines) read part of a long note.",
+             `limit` (number of lines) read part of a long note. Notes in a Private folder or marked ai-access: none are refused.",
             obj(
                 json!({
                     "path": string("The note's path in the notes folder, or its name"),
